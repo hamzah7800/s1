@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Red Light Green Light Game</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            color: white;
+            font-family: monospace;
+        }
+        #joystick-zone {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Click to start • Use WASD or joystick to move</div>
+    <div id="joystick-zone"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "three/addons/controls/PointerLockControls.js": "https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        let camera, scene, renderer, player, controls;
+        const moveSpeed = 0.1;
+        const keyState = {};
+        let isGreenLight = true;
+        let previousPlayerPosition = new THREE.Vector3();
+        let lastLightSwitch = Date.now();
+        const lightInterval = 5000; // 5 seconds between switches
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            controls = new PointerLockControls(camera, document.body);
+            scene.add(controls.getObject());
+
+            document.body.addEventListener('click', () => controls.lock());
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 20, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            const loader = new GLTFLoader();
+            loader.load('scene.gltf', gltf => {
+                gltf.scene.scale.set(10, 10, 10);
+                gltf.scene.position.y = -1;
+                gltf.scene.traverse(node => {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                scene.add(gltf.scene);
+            });
+
+            createPlayer();
+            setupJoystick();
+
+            window.addEventListener('keydown', e => keyState[e.code] = true);
+            window.addEventListener('keyup', e => keyState[e.code] = false);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createPlayer() {
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load('456.webp');
+            const material = new THREE.MeshStandardMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+
+            player = new THREE.Mesh(geometry, material);
+            player.position.set(0, 1.5, 10);
+            player.castShadow = true;
+            scene.add(player);
+
+            previousPlayerPosition.copy(player.position);
+        }
+
+        function updatePlayerMovement() {
+            if (!player || !controls) return;
+
+            const direction = new THREE.Vector3();
+            const velocity = new THREE.Vector3();
+
+            controls.getDirection(direction);
+            direction.y = 0;
+            direction.normalize();
+
+            const sideDirection = new THREE.Vector3();
+            sideDirection.crossVectors(direction, new THREE.Vector3(0, 1, 0));
+
+            if (keyState['KeyW']) velocity.add(direction.clone().multiplyScalar(moveSpeed));
+            if (keyState['KeyS']) velocity.add(direction.clone().multiplyScalar(-moveSpeed));
+            if (keyState['KeyA']) velocity.add(sideDirection.clone().multiplyScalar(-moveSpeed));
+            if (keyState['KeyD']) velocity.add(sideDirection.clone().multiplyScalar(moveSpeed));
+
+            const newPosition = player.position.clone().add(velocity);
+
+            if (isGreenLight) {
+                player.position.copy(newPosition);
+            } else if (!newPosition.equals(previousPlayerPosition)) {
+                player.position.set(0, 1.5, 10);
+                document.getElementById('info').innerText = "❌ You moved on Red Light!";
+            }
+
+            previousPlayerPosition.copy(player.position);
+            controls.getObject().position.copy(player.position).add(new THREE.Vector3(0, 0.5, 0));
+        }
+
+        function setupJoystick() {
+            const joystick = nipplejs.create({
+                zone: document.getElementById('joystick-zone'),
+                mode: 'static',
+                position: { left: '50px', bottom: '50px' },
+                color: 'white'
+            });
+
+            joystick.on('move', (evt, data) => {
+                if (!data || !data.vector) return;
+
+                const angle = data.angle.degree * (Math.PI / 180);
+                const dx = Math.cos(angle) * moveSpeed;
+                const dz = Math.sin(angle) * moveSpeed;
+
+                const newPosition = player.position.clone().add(new THREE.Vector3(dx, 0, dz));
+
+                if (isGreenLight) {
+                    player.position.copy(newPosition);
+                } else if (!newPosition.equals(previousPlayerPosition)) {
+                    player.position.set(0, 1.5, 10);
+                    document.getElementById('info').innerText = "❌ You moved on Red Light!";
+                }
+
+                previousPlayerPosition.copy(player.position);
+                controls.getObject().position.copy(player.position).add(new THREE.Vector3(0, 0.5, 0));
+            });
+        }
+
+        function toggleLight() {
+            const now = Date.now();
+            if (now - lastLightSwitch >= lightInterval) {
+                isGreenLight = !isGreenLight;
+                document.getElementById('info').innerText = isGreenLight ? "🟢 Green Light! Move!" : "🔴 Red Light! Stop!";
+                lastLightSwitch = now;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            toggleLight();
+            updatePlayerMovement();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
