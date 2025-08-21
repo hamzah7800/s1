@@ -1,33 +1,227 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Three.js Test</title>
-  <style>body{margin:0;}</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Minimal FPS — Plane + Cube + Joystick</title>
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; background: #0b1020; }
+    #app { position: fixed; inset: 0; }
+
+    /* UI overlay */
+    .hud { position: fixed; inset: 0; pointer-events: none; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .hint { position: fixed; top: env(safe-area-inset-top, 12px); left: 12px; right: 12px; color: #e6ecff; opacity: 0.85; font-size: 14px; line-height: 1.4; pointer-events: none; }
+    .pill { display: inline-flex; gap: 8px; align-items: center; padding: 8px 12px; background: rgba(20,28,48,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; backdrop-filter: blur(8px); }
+
+    /* Joystick area */
+    #joy-area { position: fixed; left: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); width: 160px; height: 160px; pointer-events: auto; touch-action: none; }
+
+    /* Look area (drag anywhere else) */
+    #look-area { position: fixed; inset: 0; pointer-events: auto; touch-action: none; }
+
+    /* Prevent long-press and selection */
+    * { -webkit-user-select: none; -webkit-touch-callout: none; user-select: none; }
+  </style>
 </head>
 <body>
-<script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
-<script>
-let scene=new THREE.Scene();
-let camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-let renderer=new THREE.WebGLRenderer();
-renderer.setSize(innerWidth,innerHeight);
-document.body.appendChild(renderer.domElement);
+  <div id="app"></div>
+  <div id="look-area"></div>
+  <div id="joy-area"></div>
+  <div class="hud">
+    <div class="hint">
+      <span class="pill">🎮 Move: left joystick • Look: drag anywhere • Desktop: WASD + mouse drag</span>
+    </div>
+  </div>
 
-let geometry=new THREE.BoxGeometry();
-let material=new THREE.MeshBasicMaterial({color:0x00ff00});
-let cube=new THREE.Mesh(geometry,material);
-scene.add(cube);
+  <!-- Three.js & Nipple.js -->
+  <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
 
-camera.position.z=5;
+  <script>
+    // --- Basic Three.js setup ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0b1020, 50, 200);
 
-function animate(){
-  requestAnimationFrame(animate);
-  cube.rotation.x+=0.01;
-  cube.rotation.y+=0.01;
-  renderer.render(scene,camera);
-}
-animate();
-</script>
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x0b1020, 1);
+    document.getElementById('app').appendChild(renderer.domElement);
+
+    // Lighting
+    const hemi = new THREE.HemisphereLight(0xcad8ff, 0x1b223a, 0.6);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(30, 50, 10);
+    dir.castShadow = true;
+    scene.add(dir);
+
+    // Ground (a big plane)
+    const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a345a, metalness: 0.1, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Simple cube to look at
+    const cubeGeo = new THREE.BoxGeometry(2, 2, 2);
+    const cubeMat = new THREE.MeshStandardMaterial({ color: 0x8fd0ff });
+    const cube = new THREE.Mesh(cubeGeo, cubeMat);
+    cube.position.set(0, 1, -8);
+    cube.castShadow = true;
+    scene.add(cube);
+
+    // Subtle horizon props (optional)
+    for (let i = 0; i < 80; i++) {
+      const s = 0.6 + Math.random() * 1.8;
+      const b = new THREE.Mesh(
+        new THREE.BoxGeometry(s, s * (1 + Math.random() * 5), s),
+        new THREE.MeshStandardMaterial({ color: 0x24305c, roughness: 1 })
+      );
+      const r = 60 + Math.random() * 120;
+      const a = Math.random() * Math.PI * 2;
+      b.position.set(Math.cos(a) * r, b.geometry.parameters.height / 2, Math.sin(a) * r);
+      scene.add(b);
+    }
+
+    // --- Player rig (FPS-style) ---
+    const player = new THREE.Object3D();
+    scene.add(player);
+
+    const CAMERA_HEIGHT = 1.7;
+    camera.position.set(0, CAMERA_HEIGHT, 0);
+    player.add(camera);
+
+    // Start position
+    player.position.set(0, 0, 8);
+    player.rotation.y = Math.PI; // face the cube by default
+
+    // Movement state
+    const input = {
+      moveX: 0, // strafe left/right (-1..1)
+      moveY: 0, // forward/back (-1..1)
+      yaw: 0,   // radians/sec
+      pitch: 0, // not used (camera pitch could be added later)
+    };
+
+    // Desktop keyboard fallback
+    const keys = new Set();
+    window.addEventListener('keydown', (e) => { keys.add(e.code); });
+    window.addEventListener('keyup',   (e) => { keys.delete(e.code); });
+
+    // Mouse/touch look (drag anywhere)
+    let dragging = false;
+    let lastX = 0;
+
+    const lookArea = document.getElementById('look-area');
+    lookArea.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; });
+    window.addEventListener('mouseup', () => { dragging = false; });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      lastX = e.clientX;
+      const sensitivity = 0.0025;
+      player.rotation.y -= dx * sensitivity; // left drag rotates left
+    });
+
+    // Touch look
+    lookArea.addEventListener('touchstart', (e) => {
+      if (e.target.id === 'joy-area') return; // ignore if touch is on joystick
+      dragging = true;
+      lastX = e.touches[0].clientX;
+    }, { passive: false });
+    lookArea.addEventListener('touchend', () => { dragging = false; }, { passive: false });
+    lookArea.addEventListener('touchmove', (e) => {
+      if (!dragging || e.target.id === 'joy-area') return;
+      const x = e.touches[0].clientX;
+      const dx = x - lastX;
+      lastX = x;
+      const sensitivity = 0.004;
+      player.rotation.y -= dx * sensitivity;
+      e.preventDefault();
+    }, { passive: false });
+
+    // --- Nipple.js joystick for movement ---
+    const joystick = nipplejs.create({
+      zone: document.getElementById('joy-area'),
+      mode: 'static',
+      position: { left: '80px', bottom: '80px' },
+      size: 120,
+      color: 'white',
+      restOpacity: 0.3,
+    });
+
+    let joyForce = 0; // 0..1
+    let joyAngle = 0; // radians (0 = right, PI/2 = up)
+
+    joystick.on('move', (evt, data) => {
+      if (!data || !data.vector) return;
+      joyForce = Math.min(1, data.force || 0);
+      // Nipple angle is clockwise from right; we want forward/back relative to screen up
+      joyAngle = data.angle ? data.angle.radian : 0; // 0 right, PI/2 up
+      // Convert screen-space to game-space (forward = up on joystick => -Z in world when yaw = 0)
+      const x = Math.cos(joyAngle) * joyForce; // right
+      const y = Math.sin(joyAngle) * joyForce; // up
+      input.moveX = x;      // strafe
+      input.moveY = y;      // forward/back
+    });
+
+    joystick.on('end', () => { joyForce = 0; input.moveX = 0; input.moveY = 0; });
+
+    // Resize handling
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- Game loop ---
+    const clock = new THREE.Clock();
+
+    function update(dt) {
+      // Desktop WASD input → same channels as joystick
+      let kx = 0, ky = 0;
+      if (keys.has('KeyA')) kx -= 1;
+      if (keys.has('KeyD')) kx += 1;
+      if (keys.has('KeyW')) ky += 1;
+      if (keys.has('KeyS')) ky -= 1;
+      // Normalize keyboard vector
+      if (kx !== 0 || ky !== 0) {
+        const len = Math.hypot(kx, ky);
+        kx /= len; ky /= len;
+        input.moveX = kx; input.moveY = ky;
+      } else if (joyForce === 0) {
+        input.moveX = 0; input.moveY = 0;
+      }
+
+      const speed = 6.0; // meters/sec
+      const vx = input.moveX * speed * dt;
+      const vz = input.moveY * speed * dt;
+
+      // Transform local movement by player yaw
+      const sin = Math.sin(player.rotation.y);
+      const cos = Math.cos(player.rotation.y);
+      const dx = (vx * cos) + (vz * sin);
+      const dz = (-vx * sin) + (-vz * cos);
+
+      player.position.x += dx;
+      player.position.z += dz;
+
+      // Keep on ground plane
+      player.position.y = 0;
+    }
+
+    function animate() {
+      const dt = Math.min(0.033, clock.getDelta()); // clamp
+      update(dt);
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
 </body>
 </html>
