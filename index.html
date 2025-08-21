@@ -1,123 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>3D Racing Game - Mobile Joystick</title>
-<style>
-  body { margin: 0; overflow: hidden; background: #000; }
-  canvas { display: block; }
-  .joystick {
-    position: fixed;
-    bottom: 20px;
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.1);
-    border: 2px solid rgba(255,255,255,0.4);
-    touch-action: none;
-  }
-  #joystick-left { left: 20px; }
-  #joystick-right { right: 20px; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Magnificent Car Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #joystick-container {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      pointer-events: none;
+    }
+    .joystick {
+      width: 120px;
+      height: 120px;
+      background: rgba(255,255,255,0.1);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+  </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
-<div id="joystick-left" class="joystick"></div>
-<div id="joystick-right" class="joystick"></div>
+  <div id="joystick-container">
+    <div id="joystick-left" class="joystick"></div>
+    <div id="joystick-right" class="joystick"></div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
-<script>
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas') });
-renderer.setSize(innerWidth, innerHeight);
-renderer.outputEncoding = THREE.sRGBEncoding;
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x202020);
 
-// Lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(10, 10, 10);
-scene.add(dirLight);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
 
-// Physics
-const world = new CANNON.World();
-world.gravity.set(0, -9.82, 0);
+    // Ground
+    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-// Ground
-const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
-groundBody.quaternion.setFromEuler(-Math.PI/2, 0, 0);
-world.addBody(groundBody);
+    // Car
+    const carGeo = new THREE.BoxGeometry(2, 1, 4);
+    const carMat = new THREE.MeshStandardMaterial({ color: 0xff4444 });
+    const car = new THREE.Mesh(carGeo, carMat);
+    car.castShadow = true;
+    car.position.y = 0.5;
+    scene.add(car);
 
-const groundMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(200,200),
-  new THREE.MeshStandardMaterial({ color: 0x228B22 })
-);
-groundMesh.rotation.x = -Math.PI/2;
-scene.add(groundMesh);
+    // Lights
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambient);
 
-// Car physics
-const carBody = new CANNON.Body({
-  mass: 150,
-  shape: new CANNON.Box(new CANNON.Vec3(1,0.5,2))
-});
-carBody.position.set(0,1,0);
-world.addBody(carBody);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10, 20, 10);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
 
-// Car visual (no image)
-const carMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(2,1,4),
-  new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.3, roughness: 0.6 })
-);
-scene.add(carMesh);
+    // Camera follow
+    function updateCamera() {
+      const offset = new THREE.Vector3(0, 5, -10).applyQuaternion(car.quaternion);
+      camera.position.copy(car.position).add(offset);
+      camera.lookAt(car.position);
+    }
 
-// Joystick control data
-let joystick = { leftY: 0, rightX: 0 };
+    // Joystick logic
+    let leftInput = { x: 0, y: 0 };
+    let rightInput = { x: 0, y: 0 };
 
-function setupJoystick(el, axis) {
-  let start = null;
-  el.addEventListener('touchstart', e => {
-    start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  });
-  el.addEventListener('touchmove', e => {
-    const dx = e.touches[0].clientX - start.x;
-    const dy = e.touches[0].clientY - start.y;
-    if (axis === 'left') joystick.leftY = -dy / 50;
-    if (axis === 'right') joystick.rightX = dx / 50;
-  });
-  el.addEventListener('touchend', () => {
-    if (axis === 'left') joystick.leftY = 0;
-    if (axis === 'right') joystick.rightX = 0;
-  });
-}
-setupJoystick(document.getElementById('joystick-left'), 'left');
-setupJoystick(document.getElementById('joystick-right'), 'right');
+    function setupJoystick(id, callback) {
+      const el = document.getElementById(id);
+      let dragging = false;
+      let startX = 0, startY = 0;
 
-// Movement
-function updateControls() {
-  if (Math.abs(joystick.leftY) > 0.1) {
-    carBody.applyForce(new CANNON.Vec3(0, 0, -500 * joystick.leftY), carBody.position);
-  }
-  carBody.angularVelocity.y -= joystick.rightX * 0.05;
-}
+      el.addEventListener('touchstart', e => {
+        dragging = true;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+      });
 
-// Camera follow
-function updateCamera() {
-  camera.position.set(carBody.position.x - 6, carBody.position.y + 3, carBody.position.z + 6);
-  camera.lookAt(carBody.position);
-}
+      el.addEventListener('touchmove', e => {
+        if (!dragging) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        const max = 40;
+        const x = Math.max(-max, Math.min(max, dx)) / max;
+        const y = Math.max(-max, Math.min(max, dy)) / max;
+        callback({ x, y });
+      });
 
-// Game loop
-function animate() {
-  requestAnimationFrame(animate);
-  world.step(1/60);
-  updateControls();
-  carMesh.position.copy(carBody.position);
-  carMesh.quaternion.copy(carBody.quaternion);
-  updateCamera();
-  renderer.render(scene, camera);
-}
-animate();
-</script>
+      el.addEventListener('touchend', () => {
+        dragging = false;
+        callback({ x: 0, y: 0 });
+      });
+    }
+
+    setupJoystick('joystick-left', input => leftInput = input);
+    setupJoystick('joystick-right', input => rightInput = input);
+
+    // Car movement
+    let velocity = 0;
+    const maxSpeed = 0.2;
+    const acceleration = 0.01;
+    const turnSpeed = 0.03;
+
+    function updateCar() {
+      // Forward/backward
+      if (leftInput.y < -0.1) velocity = Math.min(maxSpeed, velocity + acceleration);
+      else if (leftInput.y > 0.1) velocity = Math.max(-maxSpeed, velocity - acceleration);
+      else velocity *= 0.95; // friction
+
+      // Turning
+      if (rightInput.x > 0.1) car.rotation.y -= turnSpeed;
+      else if (rightInput.x < -0.1) car.rotation.y += turnSpeed;
+
+      // Move car
+      const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
+      car.position.add(direction.multiplyScalar(velocity));
+    }
+
+    // Animate
+    function animate() {
+      requestAnimationFrame(animate);
+      updateCar();
+      updateCamera();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
 </body>
 </html>
