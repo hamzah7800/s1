@@ -1,441 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HTML5 Car Racing — PS4 Controller Ready</title>
-  <style>
-    :root{
-      --bg:#0b0f13; --fg:#e8f1ff; --muted:#9fb2c8; --accent:#4ade80; --danger:#ef4444; --track:#2b3644; --kerb:#c53030; --grass:#0f3b18; --shadow:#00000050;
-    }
-    html,body{height:100%;}
-    body{margin:0;background:radial-gradient(1200px 600px at 70% 20%, #0f1520 0%, #0b0f13 70%);color:var(--fg);font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";}
-    #ui{position:fixed;inset:0;display:flex;flex-direction:column;}
-    header{display:flex;gap:.75rem;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(180deg, #0d1219, #0b0f13 60%);border-bottom:1px solid #111720;}
-    header h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.5px;color:#dbeafe}
-    header .badges{display:flex;gap:.5rem;align-items:center;}
-    .badge{font-size:12px;padding:6px 10px;border-radius:9999px;background:#111827;border:1px solid #1f2937;color:#cfe1ff;display:inline-flex;gap:.4rem;align-items:center}
-    .badge.ok{background:#0f2f1a;border-color:#134e28;color:#baf7cc}
-    .badge.warn{background:#2b1616;border-color:#5b1f1f;color:#ffd6d6}
-    main{flex:1;display:grid;grid-template-columns:1fr 320px;gap:12px;padding:12px}
-    @media (max-width: 980px){ main{grid-template-columns:1fr} #panel{order:-1} }
-    #gameWrap{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 30px 60px var(--shadow), inset 0 0 0 1px #0f172a}
-    canvas{display:block;width:100%;height:100%;background:var(--grass)}
-    #panel{display:flex;flex-direction:column;gap:12px}
-    .card{background:#0d1320;border:1px solid #151e31;border-radius:16px;box-shadow:0 12px 24px var(--shadow)}
-    .card h3{margin:0;padding:12px 14px;border-bottom:1px solid #151e31;color:#d1e8ff;font-size:14px;letter-spacing:.3px}
-    .card .content{padding:12px 14px;color:var(--muted);font-size:13px;line-height:1.5}
-    .row{display:flex;gap:8px;align-items:center;justify-content:space-between}
-    .pill{padding:6px 10px;border-radius:999px;background:#0f172a;border:1px solid #1f2937;color:#cfe1ff;font-size:12px}
-    .btn{appearance:none;cursor:pointer;border:none;border-radius:12px;padding:10px 14px;background:#111827;color:#d1e8ff;border:1px solid #1f2937;box-shadow:0 8px 20px var(--shadow);font-weight:600}
-    .btn:hover{filter:brightness(1.1)}
-    .btn:active{transform:translateY(1px)}
-    .btn.primary{background:#18392b;border-color:#1f6f4c;color:#c9ffe1}
-    #hud{position:absolute;inset:0;pointer-events:none}
-    #hud .top{position:absolute;top:10px;left:10px;display:flex;gap:10px}
-    #hud .box{background:#0b1220cc;border:1px solid #18233b;color:#cfe1ff;padding:8px 10px;border-radius:10px;font-size:12px}
-    #hud .center{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:10px}
-    #toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#06101b; border:1px solid #11243b; padding:10px 14px;border-radius:12px; box-shadow:0 12px 24px var(--shadow); color:#bde0ff; font-size:13px; display:none}
-  </style>
+  <meta charset="utf-8">
+  <title>3D Racing Demo</title>
+  <style>body{margin:0;overflow:hidden;}canvas{display:block}</style>
 </head>
 <body>
-  <div id="ui">
-    <header>
-      <h1>HTML5 Car Racing — PS4 Controller Ready</h1>
-      <div class="badges">
-        <div id="gpStatus" class="badge warn">🎮 Controller: Not Connected</div>
-        <div id="kbStatus" class="badge ok">⌨️ Keyboard: Ready</div>
-        <div class="badge">⚙️ 60 FPS target</div>
-      </div>
-    </header>
-    <main>
-      <div id="gameWrap" class="card">
-        <canvas id="game" width="1280" height="720"></canvas>
-        <div id="hud">
-          <div class="top">
-            <div class="box" id="lapBox">Lap: 0 | Best: —</div>
-            <div class="box" id="timeBox">Time: 0.000s</div>
-            <div class="box" id="speedBox">Speed: 0 km/h</div>
-          </div>
-          <div class="center">
-            <div class="box">R2 = Gas • L2 = Brake/Reverse • L-Stick = Steer • Options = Pause</div>
-          </div>
-        </div>
-      </div>
-      <aside id="panel">
-        <div class="card">
-          <h3>How to use your PS4 (DualShock 4)</h3>
-          <div class="content">
-            <ol>
-              <li>Connect via Bluetooth or USB. In Bluetooth list it appears as <b>Wireless Controller</b>.</li>
-              <li>Press any button to wake it. Then hit <b>Start</b> below or just press <b>Options</b> on the pad.</li>
-              <li>In Chrome/Edge/Firefox, the <b>Gamepad API</b> should detect it automatically.</li>
-            </ol>
-            <div class="row" style="margin-top:8px">
-              <button id="startBtn" class="btn primary">▶ Start Race</button>
-              <button id="resetBtn" class="btn">↺ Reset</button>
-            </div>
-            <p style="margin-top:10px">Keyboard fallback: <b>W/S</b> or <b>↑/↓</b> for gas/brake, <b>A/D</b> or <b>←/→</b> to steer, <b>Space</b> handbrake, <b>P</b> pause.</p>
-          </div>
-        </div>
-        <div class="card">
-          <h3>Tuning</h3>
-          <div class="content">
-            <div class="row"><span>Assist (stability)</span><input id="assist" type="range" min="0" max="1" step="0.01" value="0.35"></div>
-            <div class="row"><span>Grip</span><input id="grip" type="range" min="0.7" max="1.2" step="0.01" value="0.95"></div>
-            <div class="row"><span>Max Speed</span><input id="maxv" type="range" min="6" max="14" step="0.1" value="10.5"></div>
-            <div class="row"><span>Camera Zoom</span><input id="zoom" type="range" min="0.8" max="1.4" step="0.01" value="1.0"></div>
-          </div>
-        </div>
-        <div class="card">
-          <h3>About</h3>
-          <div class="content">
-            <p>A compact, zero‑asset racing loop with lap timing, checkpoints, and subtle drifting. Fully playable with DualShock 4 via the Web Gamepad API.</p>
-          </div>
-        </div>
-      </aside>
-    </main>
-  </div>
-  <div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+<script>
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
 
-  <script>
-  // --- Utility helpers ---
-  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  const lerp=(a,b,t)=>a+(b-a)*t;
-  const now=()=>performance.now();
-  function showToast(msg,ms=1600){
-    const t=document.getElementById('toast');
-    t.textContent=msg; t.style.display='block';
-    clearTimeout(showToast._to);
-    showToast._to=setTimeout(()=>{t.style.display='none'},ms);
+// Lights
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1));
+let dirLight = new THREE.DirectionalLight(0xffffff,0.8);
+dirLight.position.set(10,20,10);
+scene.add(dirLight);
+
+// Track (simple plane as placeholder road)
+let trackGeo = new THREE.PlaneGeometry(100,300);
+let trackMat = new THREE.MeshStandardMaterial({color:0x333333});
+let track = new THREE.Mesh(trackGeo,trackMat);
+track.rotation.x = -Math.PI/2;
+scene.add(track);
+
+// Car (basic box)
+let carGeo = new THREE.BoxGeometry(2,1,4);
+let carMat = new THREE.MeshStandardMaterial({color:0x00aaff});
+let car = new THREE.Mesh(carGeo,carMat);
+car.position.y = 0.5;
+scene.add(car);
+
+// Camera offset (third person)
+let camOffset = new THREE.Vector3(0,5,-10);
+
+// Inputs
+let input={steer:0,throttle:0,brake:0};
+let keys={};
+window.addEventListener('keydown',e=>keys[e.code]=true);
+window.addEventListener('keyup',e=>keys[e.code]=false);
+
+function pollKeyboard(){
+  input.steer = (keys["ArrowLeft"]||keys["KeyA"]?-1:0) + (keys["ArrowRight"]||keys["KeyD"]?1:0);
+  input.throttle = keys["ArrowUp"]||keys["KeyW"]?1:0;
+  input.brake = keys["ArrowDown"]||keys["KeyS"]?1:0;
+}
+
+// Gamepad (any controller)
+function pollGamepad(){
+  let pads=navigator.getGamepads();
+  for(let gp of pads){
+    if(!gp) continue;
+    input.steer=gp.axes[0]||0;
+    input.throttle=gp.buttons[7]?.value||0;
+    input.brake=gp.buttons[6]?.value||0;
+    break;
   }
+}
 
-  // --- Canvas & world ---
-  const canvas=document.getElementById('game');
-  const ctx=canvas.getContext('2d');
-  const W=canvas.width, H=canvas.height;
+// Mobile joystick
+let joystick=nipplejs.create({zone:document.body,multitouch:false});
+joystick.on("move",(evt,data)=>{
+  input.steer=data.vector.x;
+  input.throttle=data.vector.y<0?-data.vector.y:0;
+  input.brake=data.vector.y>0?data.vector.y:0;
+});
+joystick.on("end",()=>{input.steer=0;input.throttle=0;input.brake=0;});
 
-  // Dynamic camera
-  const camera={x:0,y:0,zoom:1};
-
-  // Racetrack (parametric lemniscate-inspired loop built from bezier waypoints)
-  const waypoints=[];
-  (function buildTrack(){
-    const cx=0, cy=0, r=380;
-    const pts=24; // smoothness
-    for(let i=0;i<pts;i++){
-      const t=i/pts*2*Math.PI;
-      const k=0.65+0.25*Math.sin(2*t); // squish to make S‑curve feel
-      const x=cx + Math.cos(t)*r*k;
-      const y=cy + Math.sin(t)*r;
-      waypoints.push({x,y});
-    }
-  })();
-
-  function drawTrack(){
-    ctx.save();
-    ctx.translate(W/2 - camera.x*camera.zoom, H/2 - camera.y*camera.zoom);
-    ctx.scale(camera.zoom,camera.zoom);
-
-    // Grass
-    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--grass');
-    ctx.fillRect(-2000,-2000,4000,4000);
-
-    // Asphalt ribbon
-    ctx.lineJoin='round';
-    ctx.lineCap='round';
-    // Outer
-    ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--track');
-    ctx.lineWidth=64;
-    ctx.beginPath();
-    for(let i=0;i<waypoints.length;i++){
-      const p=waypoints[i];
-      if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
-    // Kerb
-    ctx.setLineDash([24,18]);
-    ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--kerb');
-    ctx.lineWidth=8;
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Start/finish gate between first and opposite waypoint
-    const a=waypoints[0];
-    const b=waypoints[Math.floor(waypoints.length/2)];
-    ctx.save();
-    ctx.translate(a.x,a.y);
-    const ang=Math.atan2(b.y-a.y,b.x-a.x)+Math.PI/2;
-    ctx.rotate(ang);
-    ctx.fillStyle='#ffffff';
-    ctx.fillRect(-24,-40,48,80);
-    ctx.fillStyle='#000000';
-    for(let i=0;i<6;i++) ctx.fillRect(-24 + (i%2?24:0), -40 + i*14, 24, 14);
-    ctx.restore();
-
-    // Checkpoints (invisible; draw subtle beacons)
-    ctx.globalAlpha=0.35;
-    ctx.fillStyle='#93c5fd';
-    for(const c of checkpoints){ ctx.beginPath(); ctx.arc(c.x,c.y,6,0,Math.PI*2); ctx.fill(); }
-    ctx.globalAlpha=1;
-
-    ctx.restore();
-  }
-
-  // Build checkpoints around the loop
-  const checkpoints=[];
-  for(let i=0;i<8;i++){
-    const idx=Math.floor(i*waypoints.length/8)%waypoints.length;
-    const p=waypoints[idx];
-    // place a small gate perpendicular to forward direction
-    const next=waypoints[(idx+1)%waypoints.length];
-    const ang=Math.atan2(next.y-p.y,next.x-p.x) + Math.PI/2;
-    const d=24;
-    checkpoints.push({x:p.x+Math.cos(ang)*d, y:p.y+Math.sin(ang)*d, n:i});
-  }
-
-  // --- Car physics ---
-  const car={
-    x:waypoints[0].x, y:waypoints[0].y, angle:0,
-    vx:0, vy:0, w:34, h:16,
-    steer:0, throttle:0, brake:0, handbrake:0,
-  };
-
-  // HUD & timing
-  const hud={lap:0, lapStart:now(), best:null, nextCP:0};
-
-  function resetCar(){
-    car.x=waypoints[0].x; car.y=waypoints[0].y; car.angle=Math.atan2(waypoints[1].y-car.y,waypoints[1].x-car.x);
-    car.vx=car.vy=0; car.steer=0; car.throttle=0; car.brake=0; car.handbrake=0;
-    hud.lap=0; hud.best=null; hud.lapStart=now(); hud.nextCP=0; paused=false;
-  }
-
-  // Inputs (keyboard + gamepad)
-  const input={ axes:[0,0], gas:0, brake:0, hand:0, pause:false };
-
-  // Keyboard mapping
-  const keys={};
-  window.addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='KeyP') togglePause(); });
-  window.addEventListener('keyup',e=>{ keys[e.code]=false; });
-
-  function pollKeyboard(){
-    const left = keys['ArrowLeft']||keys['KeyA']? -1: 0;
-    const right= keys['ArrowRight']||keys['KeyD']?  1: 0;
-    input.axes[0]=left+right; // steer
-    const fwd = keys['ArrowUp']||keys['KeyW']? 1:0;
-    const back= keys['ArrowDown']||keys['KeyS']? 1:0;
-    input.gas=fwd; input.brake=back; input.hand=keys['Space']?1:0;
-  }
-
-  // Gamepad mapping for DualShock 4
-  let hasPad=false, padIndex=0;
-  function deadzone(v, dz=0.15){ return Math.abs(v)<dz?0:v; }
-  function pollGamepad(){
-    const pads=navigator.getGamepads?navigator.getGamepads():[];
-    for(let i=0;i<pads.length;i++) if(pads[i]) { hasPad=true; padIndex=i; break; }
-    if(!hasPad) return;
-    const gp=pads[padIndex]; if(!gp) return;
-    // axes: 0 (LX), 1 (LY)
-    input.axes[0]=deadzone(gp.axes[0]||0);
-    // triggers are buttons 7 (R2), 6 (L2) analog 0..1
-    input.gas = gp.buttons[7]? gp.buttons[7].value|| (gp.buttons[7].pressed?1:0): 0;
-    input.brake = gp.buttons[6]? gp.buttons[6].value|| (gp.buttons[6].pressed?1:0): 0;
-    input.hand = gp.buttons[1]? (gp.buttons[1].pressed?1:0): 0; // Circle = handbrake
-    const optionsPressed = gp.buttons[9] && gp.buttons[9].pressed; // Options
-    if(optionsPressed && !pollGamepad._optLast){ togglePause(); }
-    pollGamepad._optLast=optionsPressed;
-  }
-
-  window.addEventListener('gamepadconnected', e=>{
-    hasPad=true; padIndex=e.gamepad.index; updateGPBadge(); showToast('Controller connected: '+e.gamepad.id);
-  });
-  window.addEventListener('gamepaddisconnected', ()=>{ hasPad=false; updateGPBadge(); showToast('Controller disconnected'); });
-
-  function updateGPBadge(){
-    const el=document.getElementById('gpStatus');
-    if(hasPad){ el.className='badge ok'; el.textContent='🎮 Controller: Connected'; }
-    else { el.className='badge warn'; el.textContent='🎮 Controller: Not Connected'; }
-  }
-
-  // Pause
-  let paused=true;
-  function togglePause(){ paused=!paused; showToast(paused?'Paused':'Go!'); }
-
-  // Tuning controls
-  const assist=document.getElementById('assist');
-  const grip=document.getElementById('grip');
-  const maxv=document.getElementById('maxv');
-  const zoom=document.getElementById('zoom');
-  assist.addEventListener('input',()=>showToast('Assist: '+assist.value));
-  grip.addEventListener('input',()=>showToast('Grip: '+grip.value));
-  maxv.addEventListener('input',()=>showToast('Max speed: '+maxv.value));
-  zoom.addEventListener('input',()=>showToast('Zoom: '+zoom.value));
-
-  // Buttons
-  document.getElementById('startBtn').onclick=()=>{ paused=false; showToast('Go!'); };
-  document.getElementById('resetBtn').onclick=()=>{ resetCar(); showToast('Reset'); };
-
-  // Physics step
-  function step(dt){
-    // Inputs
-    pollKeyboard();
-    pollGamepad();
-
-    // Merge inputs: prefer gamepad when present
-    const steer = hasPad? input.axes[0]: input.axes[0]; // same source as we set above
-    const gas = input.gas;
-    const brk = input.brake;
-    const hand = input.hand;
-
-    // Update car controls
-    car.steer = clamp(steer,-1,1);
-    car.throttle = clamp(gas,0,1);
-    car.brake = clamp(brk,0,1);
-    car.handbrake = clamp(hand,0,1);
-
-    // Vehicle dynamics (simple bicycle model-ish)
-    const speed = Math.hypot(car.vx,car.vy);
-    const heading = car.angle;
-
-    // Acceleration forward/back
-    const maxSpeed=Number(maxv.value); // world units per second
-    const engine = 18 * car.throttle * (1 - speed/maxSpeed);
-    const braking = -22 * car.brake;
-    const baseFriction = -3.5; // rolling drag
-    const fx = Math.cos(heading) * (engine + braking + baseFriction*speed);
-    const fy = Math.sin(heading) * (engine + braking + baseFriction*speed);
-
-    // Lateral slip & grip
-    const forwardX=Math.cos(heading), forwardY=Math.sin(heading);
-    const lateralX=-forwardY, lateralY=forwardX;
-    const vForward = car.vx*forwardX + car.vy*forwardY;
-    const vLateral = car.vx*lateralX + car.vy*lateralY;
-
-    // handbrake kills lateral grip
-    const gripCoef = Number(grip.value) * (car.handbrake? 0.35: 1.0);
-    const sideFriction = -8 * vLateral * gripCoef;
-
-    const ax = fx + sideFriction * lateralX;
-    const ay = fy + sideFriction * lateralY;
-
-    car.vx += ax * dt;
-    car.vy += ay * dt;
-
-    // Steering affects orientation; stability assist reduces spin at speed
-    const turnRate = 2.6; // rad/sec at full lock
-    const stability = Number(assist.value);
-    car.angle += car.steer * turnRate * (0.4 + 0.6*(1 - stability*Math.min(1, speed/maxSpeed))) * dt;
-
-    // Position integrate
-    car.x += car.vx * dt;
-    car.y += car.vy * dt;
-
-    // Soft limit max speed
-    const s=Math.hypot(car.vx,car.vy);
-    if(s>maxSpeed){ const k=maxSpeed/s; car.vx*=k; car.vy*=k; }
-
-    // Lap + checkpoints
-    handleCheckpoints();
-
-    // Camera follow
-    const targetZoom=Number(zoom.value);
-    camera.zoom=lerp(camera.zoom,targetZoom,0.08);
-    const camLead=clamp(s*5,0,140);
-    const tx=car.x + Math.cos(car.angle)*camLead;
-    const ty=car.y + Math.sin(car.angle)*camLead;
-    camera.x=lerp(camera.x,tx,0.12);
-    camera.y=lerp(camera.y,ty,0.12);
-
-    // HUD
-    document.getElementById('timeBox').textContent = 'Time: ' + ((now()-hud.lapStart)/1000).toFixed(3) + 's';
-    document.getElementById('speedBox').textContent = 'Speed: ' + Math.round(s*22) + ' km/h';
-    document.getElementById('lapBox').textContent = `Lap: ${hud.lap} | Best: ${hud.best? hud.best.toFixed(3)+'s':'—'}`;
-  }
-
-  function handleCheckpoints(){
-    const c = checkpoints[hud.nextCP];
-    const dx=car.x - c.x, dy=car.y - c.y;
-    if(dx*dx+dy*dy < 38*38){
-      hud.nextCP=(hud.nextCP+1)%checkpoints.length;
-      if(hud.nextCP===0){ // completed a lap
-        hud.lap++;
-        const t=(now()-hud.lapStart)/1000;
-        hud.best = hud.best? Math.min(hud.best,t): t;
-        hud.lapStart=now();
-        showToast('Lap '+hud.lap+' — '+t.toFixed(3)+'s');
-      }
-    }
-  }
-
-  function drawCar(){
-    ctx.save();
-    ctx.translate(W/2 - camera.x*camera.zoom, H/2 - camera.y*camera.zoom);
-    ctx.scale(camera.zoom,camera.zoom);
-    ctx.translate(car.x,car.y);
-    ctx.rotate(car.angle);
-
-    // shadow
-    ctx.fillStyle='rgba(0,0,0,0.35)';
-    ctx.fillRect(-car.w/2+2,-car.h/2+6,car.w,car.h);
-
-    // body
-    const grad=ctx.createLinearGradient(-car.w/2,0,car.w/2,0);
-    grad.addColorStop(0,'#60a5fa'); grad.addColorStop(1,'#22d3ee');
-    ctx.fillStyle=grad;
-    ctx.strokeStyle='#082f49';
-    ctx.lineWidth=2;
-    roundRect(ctx,-car.w/2,-car.h/2,car.w,car.h,4,true,true);
-
-    // windshield
-    ctx.fillStyle='#0ea5e9';
-    roundRect(ctx,-car.w/2+4,-car.h/2+2,car.w-8,car.h-6,3,true,false);
-
-    // wheels
-    ctx.fillStyle='#111827';
-    ctx.fillRect(-car.w/2,-car.h/2-3,10,3);
-    ctx.fillRect(car.w/2-10,-car.h/2-3,10,3);
-    ctx.fillRect(-car.w/2,car.h/2,10,3);
-    ctx.fillRect(car.w/2-10,car.h/2,10,3);
-
-    ctx.restore();
-  }
-
-  function roundRect(ctx,x,y,w,h,r,fill,stroke){
-    ctx.beginPath();
-    ctx.moveTo(x+r,y);
-    ctx.arcTo(x+w,y,x+w,y+h,r);
-    ctx.arcTo(x+w,y+h,x,y+h,r);
-    ctx.arcTo(x,y+h,x,y,r);
-    ctx.arcTo(x,y,x+w,y,r);
-    if(fill) ctx.fill();
-    if(stroke) ctx.stroke();
-  }
-
-  function render(){
-    // Clear
-    ctx.clearRect(0,0,W,H);
-    // World
-    drawTrack();
-    drawCar();
-  }
-
-  // Main loop
-  let last=now();
-  function loop(){
-    const t=now();
-    const dt= Math.min(0.05,(t-last)/1000);
-    if(!paused) step(dt);
-    render();
-    last=t; requestAnimationFrame(loop);
-  }
-
-  // Init
-  resetCar();
-  updateGPBadge();
-  loop();
-
-  </script>
+// Car physics (simple)
+let speed=0,angle=0;
+function animate(){
+  requestAnimationFrame(animate);
+  pollKeyboard(); pollGamepad();
+  // update car
+  angle -= input.steer*0.03;
+  speed += (input.throttle-input.brake)*0.02;
+  speed*=0.98; // friction
+  car.position.x += Math.sin(angle)*speed;
+  car.position.z += Math.cos(angle)*speed;
+  car.rotation.y = angle;
+  // camera follow
+  let desired = car.position.clone().add(camOffset.clone().applyAxisAngle(new THREE.Vector3(0,1,0),angle));
+  camera.position.lerp(desired,0.05);
+  camera.lookAt(car.position);
+  renderer.render(scene,camera);
+}
+animate();
+</script>
 </body>
 </html>
